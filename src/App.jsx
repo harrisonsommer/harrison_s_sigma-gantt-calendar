@@ -25,21 +25,7 @@ client.config.configureEditorPanel([
 
 const DEFAULT_SETTINGS = {
   title: 'Staff Scheduler',
-  workTypeColors: {
-    'Audit':           '#4A90D9',
-    'Review':          '#7ED321',
-    'Compile':         '#F5A623',
-    'Tax':             '#9B59B6',
-    'PTO':             '#E74C3C',
-    'Holiday':         '#E74C3C',
-    'Training':        '#1ABC9C',
-    'Special Project': '#E67E22',
-    'Client Notes':    '#BDC3C7',
-    'Organizing':      '#95A5A6',
-    'Leave':           '#7F8C8D',
-    'Off':             '#ECF0F1',
-    'Other':           '#BDC3C7',
-  },
+  workTypeColors: {},
   defaultColor: '#D5D8DC',
   weekStartsOn: 'monday',
 };
@@ -169,6 +155,26 @@ function loadSettings(jsonStr) {
     console.warn('[Scheduler] Failed to parse settings JSON, using defaults:', err.message);
     return { ...DEFAULT_SETTINGS };
   }
+}
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    const col = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * col).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function stringToColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    hash |= 0;
+  }
+  return hslToHex(Math.abs(hash) % 360, 58, 42);
 }
 
 function getWorkTypeColor(workType, workTypeColors, defaultColor) {
@@ -850,6 +856,35 @@ export default function App() {
     return result;
   }, [data, config]);
 
+  // Full color map: user-saved overrides + auto-generated for anything in the data
+  const workTypeColors = useMemo(() => {
+    const result = { ...settings.workTypeColors };
+    for (const row of rows) {
+      const wt = row.workTypeCol;
+      if (wt && !result[wt]) result[wt] = stringToColor(wt);
+    }
+    return result;
+  }, [rows, settings.workTypeColors]);
+
+  // Legend-only map: only work types visible in the currently displayed week
+  const visibleWorkTypeColors = useMemo(() => {
+    const weekDaySet = new Set(
+      Array.from({ length: 5 }, (_, i) => formatDateStr(addDays(weekStart, i)))
+    );
+    const result = {};
+    for (const row of rows) {
+      const wt = row.workTypeCol;
+      if (!wt || result[wt]) continue;
+      const startStr = parseDate(row.dateCol);
+      if (!startStr) continue;
+      const endStr = parseDate(row.endDateCol);
+      if (expandDateRange(startStr, endStr).some(d => weekDaySet.has(d))) {
+        result[wt] = workTypeColors[wt] ?? stringToColor(wt);
+      }
+    }
+    return result;
+  }, [rows, weekStart, workTypeColors]);
+
   // ── Loading state gates ──────────────────────────────────────────────────
   const hasSource  = Boolean(config.source);
   const hasAllCols = REQUIRED_COLS.every(k => Boolean(config[k]));
@@ -871,7 +906,7 @@ export default function App() {
         <SchedulerHeader
           title={settings.title}
           weekStart={weekStart}
-          workTypeColors={settings.workTypeColors}
+          workTypeColors={visibleWorkTypeColors}
           onPrev={handlePrev}
           onNext={handleNext}
           onToday={handleToday}
@@ -881,7 +916,7 @@ export default function App() {
           <SchedulerGrid
             rows={rows}
             weekStart={weekStart}
-            settings={settings}
+            settings={{ ...settings, workTypeColors }}
             onCellClick={handleCellClick}
           />
         ) : (
