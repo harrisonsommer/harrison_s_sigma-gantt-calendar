@@ -13,6 +13,7 @@ client.config.configureEditorPanel([
   { name: 'dateCol',       type: 'column', source: 'source', allowMultiple: false, label: 'Date', allowedTypes: ['date', 'datetime'] },
   { name: 'clientCol',     type: 'column', source: 'source', allowMultiple: false, label: 'Client / Engagement Name' },
   { name: 'workTypeCol',   type: 'column', source: 'source', allowMultiple: false, label: 'Work Type (for color)' },
+  { name: 'endDateCol',        type: 'column', source: 'source', allowMultiple: false, label: 'End Date (Optional)', allowedTypes: ['date', 'datetime'] },
   { name: 'config',            type: 'text',           label: 'Settings Config (JSON)', defaultValue: '{}' },
   { name: 'editMode',          type: 'toggle',         label: 'Edit Mode' },
   { name: 'selectedEmployee',  type: 'variable',       label: 'Selected Employee Variable' },
@@ -45,10 +46,13 @@ const DEFAULT_SETTINGS = {
 
 const COL_KEYS = [
   'employeeCol', 'officeCol', 'roleCol', 'departmentCol',
-  'dateCol', 'clientCol', 'workTypeCol',
+  'dateCol', 'endDateCol', 'clientCol', 'workTypeCol',
 ];
 
-const REQUIRED_COLS = COL_KEYS; // all 7 are required
+const REQUIRED_COLS = [
+  'employeeCol', 'officeCol', 'roleCol', 'departmentCol',
+  'dateCol', 'clientCol', 'workTypeCol',
+]; // endDateCol is optional
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -115,6 +119,18 @@ function parseDate(value) {
   }
 
   return null;
+}
+
+function expandDateRange(startStr, endStr) {
+  if (!endStr || endStr <= startStr) return [startStr];
+  const dates = [];
+  const cursor = new Date(startStr + 'T00:00:00');
+  const end    = new Date(endStr   + 'T00:00:00');
+  while (cursor <= end) {
+    dates.push(formatDateStr(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
 }
 
 function getMondayOfWeek(date) {
@@ -714,15 +730,19 @@ function SchedulerGrid({ rows, weekStart, settings, onCellClick }) {
   }, [rows]);
 
   // Build assignment lookup: `${employeeName}||${YYYY-MM-DD}` → row[]
+  // If a row has endDateCol, expand across every date in the range.
   const assignmentMap = useMemo(() => {
     const map = {};
     for (const row of rows) {
       if (!row.employeeCol) continue;
-      const dateStr = parseDate(row.dateCol);
-      if (!dateStr) continue;
-      const key = `${row.employeeCol}||${dateStr}`;
-      if (!map[key]) map[key] = [];
-      map[key].push(row);
+      const startStr = parseDate(row.dateCol);
+      if (!startStr) continue;
+      const endStr = parseDate(row.endDateCol);
+      for (const dateStr of expandDateRange(startStr, endStr)) {
+        const key = `${row.employeeCol}||${dateStr}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(row);
+      }
     }
     return map;
   }, [rows]);
