@@ -21,6 +21,7 @@ client.config.configureEditorPanel([
   { name: 'selectedDate',      type: 'variable',       label: 'Selected Date Variable' },
   { name: 'selectedRowId',     type: 'variable',       label: 'Selected Row ID Variable' },
   { name: 'onCellClick',       type: 'action-trigger', label: 'Cell Click Action' },
+  { name: 'onChipClick',       type: 'action-trigger', label: 'Chip Click Action' },
 ]);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -562,12 +563,12 @@ function GridHeader({ weekDays, weekView, weekStart }) {
 
 // ─── AssignmentChip ───────────────────────────────────────────────────────────
 
-function AssignmentChip({ clientName, workType, color }) {
+function AssignmentChip({ clientName, workType, color, onClick }) {
   const light = isLightColor(color);
   return (
     <div
       title={`${clientName || ''}${workType ? ` — ${workType}` : ''}`}
-      onClick={e => e.stopPropagation()}
+      onClick={e => { e.stopPropagation(); onClick?.(); }}
       style={{
         background: color,
         color: light ? '#2D3748' : '#fff',
@@ -579,7 +580,7 @@ function AssignmentChip({ clientName, workType, color }) {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         maxWidth: '100%',
-        cursor: 'default',
+        cursor: onClick ? 'pointer' : 'default',
         lineHeight: 1.5,
         border: light ? '1px solid rgba(0,0,0,0.08)' : 'none',
       }}
@@ -591,7 +592,7 @@ function AssignmentChip({ clientName, workType, color }) {
 
 // ─── AssignmentCell ───────────────────────────────────────────────────────────
 
-function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellClick }) {
+function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellClick, onChipClick }) {
   if (!assignments || assignments.length === 0) {
     return (
       <div
@@ -612,6 +613,7 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
           clientName={a.clientCol}
           workType={a.workTypeCol}
           color={getWorkTypeColor(a.workTypeCol, workTypeColors, defaultColor)}
+          onClick={onChipClick ? () => onChipClick(a.rowIdCol ?? null) : undefined}
         />
       ))}
     </div>
@@ -620,7 +622,7 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
 
 // ─── EmployeeRow ──────────────────────────────────────────────────────────────
 
-function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, dayWidth, onCellClick }) {
+function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, dayWidth, onCellClick, onChipClick }) {
   const bg = isEven ? '#FFFFFF' : '#F7F9FB';
 
   const leftCell = (content, width, left, bold = false) => (
@@ -670,6 +672,7 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
               defaultColor={defaultColor}
               bg={bg}
               onCellClick={onCellClick ? (rowId) => onCellClick(employee.employeeCol, dateStr, rowId) : undefined}
+              onChipClick={onChipClick ? (rowId) => onChipClick(employee.employeeCol, dateStr, rowId) : undefined}
             />
           </div>
         );
@@ -680,7 +683,7 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
 
 // ─── DepartmentGroup ──────────────────────────────────────────────────────────
 
-function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, dayWidth, onCellClick }) {
+function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, dayWidth, onCellClick, onChipClick }) {
   return (
     <>
       {/* Department label — full-width sticky row */}
@@ -715,6 +718,7 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
           isEven={(baseRowIndex + idx) % 2 === 0}
           dayWidth={dayWidth}
           onCellClick={onCellClick}
+          onChipClick={onChipClick}
         />
       ))}
     </>
@@ -723,7 +727,7 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
 
 // ─── SchedulerGrid ────────────────────────────────────────────────────────────
 
-function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick }) {
+function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick, onChipClick }) {
   const dayWidth = DAY_WIDTH[weekView] ?? 120;
 
   const weekDays = useMemo(() => {
@@ -820,6 +824,7 @@ function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick }) {
               baseRowIndex={base}
               dayWidth={dayWidth}
               onCellClick={onCellClick}
+              onChipClick={onChipClick}
             />
           );
         })}
@@ -860,6 +865,16 @@ export default function App() {
   const [, setSelectedDate]     = useVariable(config.selectedDate);
   const [, setSelectedRowId]    = useVariable(config.selectedRowId);
   const triggerCellClick        = useActionTrigger(config.onCellClick);
+  const triggerChipClick        = useActionTrigger(config.onChipClick);
+
+  const handleChipClick = useCallback((employeeName, dateStr, rowId) => {
+    console.log('[Scheduler] Chip clicked:', { employeeName, dateStr, rowId });
+    if (config.selectedEmployee) setSelectedEmployee(employeeName ?? '');
+    if (config.selectedDate)     setSelectedDate(dateStr ?? '');
+    if (config.selectedRowId)    setSelectedRowId(rowId != null ? String(rowId) : '');
+    if (triggerChipClick)        triggerChipClick();
+    console.log('[Scheduler] Chip variables set — employee:', config.selectedEmployee ? employeeName : '(not mapped)', '| date:', config.selectedDate ? dateStr : '(not mapped)', '| rowId:', config.selectedRowId ? rowId : '(not mapped)');
+  }, [config.selectedEmployee, config.selectedDate, config.selectedRowId, setSelectedEmployee, setSelectedDate, setSelectedRowId, triggerChipClick]);
 
   const handleCellClick = useCallback((employeeName, dateStr, rowId = null) => {
     console.log('[Scheduler] Cell clicked:', { employeeName, dateStr, rowId });
@@ -946,6 +961,7 @@ export default function App() {
             weekView={weekView}
             settings={{ ...settings, workTypeColors }}
             onCellClick={handleCellClick}
+            onChipClick={handleChipClick}
           />
       </>
     );
