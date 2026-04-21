@@ -54,6 +54,8 @@ const SENIORITY_ORDER = [
 
 const TABS = ['Schedule', 'Utilization', 'Staff View', 'Client View', 'In The Queue'];
 
+const DAY_WIDTH = { 1: 120, 2: 90, 4: 70 };
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function getSeniorityRank(role) {
@@ -447,8 +449,8 @@ function ViewTabs({ activeTab, onTabChange }) {
 
 // ─── SchedulerHeader ──────────────────────────────────────────────────────────
 
-function SchedulerHeader({ title, weekStart, workTypeColors, onPrev, onNext, onToday }) {
-  const weekEnd = addDays(weekStart, 6);
+function SchedulerHeader({ title, weekStart, weekView, workTypeColors, onPrev, onNext, onToday, onViewChange }) {
+  const rangeEnd = addDays(weekStart, weekView * 7 - 1);
 
   return (
     <div style={{
@@ -463,15 +465,39 @@ function SchedulerHeader({ title, weekStart, workTypeColors, onPrev, onNext, onT
           {title}
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={onPrev} style={S.navBtn} title="Previous week">←</button>
+          {/* View toggle */}
+          <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.22)' }}>
+            {[1, 2, 4].map(w => (
+              <button
+                key={w}
+                onClick={() => onViewChange(w)}
+                style={{
+                  padding: '4px 10px',
+                  border: 'none',
+                  borderRight: w !== 4 ? '1px solid rgba(255,255,255,0.22)' : 'none',
+                  background: weekView === w ? 'rgba(255,255,255,0.22)' : 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: weekView === w ? 700 : 400,
+                  fontFamily: 'inherit',
+                  letterSpacing: 0.2,
+                }}
+              >
+                {w}W
+              </button>
+            ))}
+          </div>
+
+          <button onClick={onPrev} style={S.navBtn} title="Previous">←</button>
           <span style={{
             fontSize: 12, fontWeight: 500,
             minWidth: 195, textAlign: 'center',
             color: '#C8D8E8', letterSpacing: 0.2,
           }}>
-            {fmtDisplay(weekStart)}&nbsp;&nbsp;–&nbsp;&nbsp;{fmtDisplay(weekEnd)}
+            {fmtDisplay(weekStart)}&nbsp;&nbsp;–&nbsp;&nbsp;{fmtDisplay(rangeEnd)}
           </span>
-          <button onClick={onNext} style={S.navBtn} title="Next week">→</button>
+          <button onClick={onNext} style={S.navBtn} title="Next">→</button>
           <button onClick={onToday} style={S.todayBtn}>Today</button>
         </div>
       </div>
@@ -484,68 +510,92 @@ function SchedulerHeader({ title, weekStart, workTypeColors, onPrev, onNext, onT
 
 // ─── GridHeader ───────────────────────────────────────────────────────────────
 
-function GridHeader({ weekDays }) {
-  const leftCell = (label, width, left) => (
-    <div style={{
-      position: 'sticky',
-      left,
-      zIndex: 5,
-      width,
-      minWidth: width,
-      background: '#EEF1F5',
-      borderRight: '1px solid #D4D8DE',
-      borderBottom: '2px solid #C8CDD5',
-      padding: '6px 8px',
-      fontSize: 10,
-      fontWeight: 700,
-      color: '#6B7280',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      display: 'flex',
-      alignItems: 'center',
-      boxSizing: 'border-box',
-      flexShrink: 0,
-    }}>
-      {label}
-    </div>
-  );
+function GridHeader({ weekDays, weekView, weekStart }) {
+  const dayWidth = DAY_WIDTH[weekView] ?? 120;
+
+  const leftCellStyle = (width, left, borderBottom = '2px solid #C8CDD5') => ({
+    position: 'sticky',
+    left,
+    zIndex: 5,
+    width,
+    minWidth: width,
+    background: '#EEF1F5',
+    borderRight: '1px solid #D4D8DE',
+    borderBottom,
+    padding: '6px 8px',
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    display: 'flex',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    flexShrink: 0,
+  });
 
   return (
-    <div style={{
-      display: 'flex',
-      position: 'sticky',
-      top: 0,
-      zIndex: 6,
-      background: '#EEF1F5',
-    }}>
-      {leftCell('Office',   60,  0)}
-      {leftCell('Role',     80,  60)}
-      {leftCell('Employee', 130, 140)}
+    <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#EEF1F5' }}>
+      {/* Week-label row (only for 2W / 4W) */}
+      {weekView > 1 && (
+        <div style={{ display: 'flex' }}>
+          {/* Left spacer — covers the 3 sticky columns */}
+          <div style={leftCellStyle(270, 0, '1px solid #D4D8DE')} />
 
-      {/* Day columns */}
-      {weekDays.map((dateStr, i) => {
-        const d = new Date(dateStr + 'T00:00:00');
-        return (
-          <div key={dateStr} style={{
-            flex: 1,
-            minWidth: 120,
-            background: '#EEF1F5',
-            borderRight: '1px solid #D4D8DE',
-            borderBottom: '2px solid #C8CDD5',
-            padding: '6px 8px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxSizing: 'border-box',
-          }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{DAY_NAMES[i]}</span>
-            <span style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
-              {d.getMonth() + 1}/{d.getDate()}
-            </span>
-          </div>
-        );
-      })}
+          {Array.from({ length: weekView }, (_, w) => {
+            const wStart = addDays(weekStart, w * 7);
+            const wEnd   = addDays(weekStart, w * 7 + 4);
+            return (
+              <div key={w} style={{
+                flex: 5,
+                minWidth: 5 * dayWidth,
+                background: '#EEF1F5',
+                borderRight: '1px solid #D4D8DE',
+                borderBottom: '1px solid #D4D8DE',
+                padding: '3px 8px',
+                fontSize: 10,
+                fontWeight: 700,
+                color: '#374151',
+                textAlign: 'center',
+                boxSizing: 'border-box',
+              }}>
+                {fmtDisplay(wStart)}&nbsp;–&nbsp;{fmtDisplay(wEnd)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Day header row */}
+      <div style={{ display: 'flex' }}>
+        <div style={leftCellStyle(60,  0)}>Office</div>
+        <div style={leftCellStyle(80,  60)}>Role</div>
+        <div style={leftCellStyle(130, 140)}>Employee</div>
+
+        {weekDays.map((dateStr, i) => {
+          const d = new Date(dateStr + 'T00:00:00');
+          return (
+            <div key={dateStr} style={{
+              flex: 1,
+              minWidth: dayWidth,
+              background: '#EEF1F5',
+              borderRight: '1px solid #D4D8DE',
+              borderBottom: '2px solid #C8CDD5',
+              padding: '6px 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{DAY_NAMES[i % 5]}</span>
+              <span style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
+                {d.getMonth() + 1}/{d.getDate()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -609,7 +659,7 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
 
 // ─── EmployeeRow ──────────────────────────────────────────────────────────────
 
-function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, onCellClick }) {
+function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, dayWidth, onCellClick }) {
   const bg = isEven ? '#FFFFFF' : '#F7F9FB';
 
   const leftCell = (content, width, left, bold = false) => (
@@ -652,7 +702,7 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
         const key = `${employee.employeeCol}||${dateStr}`;
         const assignments = assignmentMap[key] || [];
         return (
-          <div key={dateStr} style={{ flex: 1, minWidth: 120, display: 'flex', flexDirection: 'column' }}>
+          <div key={dateStr} style={{ flex: 1, minWidth: dayWidth ?? 120, display: 'flex', flexDirection: 'column' }}>
             <AssignmentCell
               assignments={assignments}
               workTypeColors={workTypeColors}
@@ -669,7 +719,7 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
 
 // ─── DepartmentGroup ──────────────────────────────────────────────────────────
 
-function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, onCellClick }) {
+function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, dayWidth, onCellClick }) {
   return (
     <>
       {/* Department label — full-width sticky row */}
@@ -702,6 +752,7 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
           workTypeColors={workTypeColors}
           defaultColor={defaultColor}
           isEven={(baseRowIndex + idx) % 2 === 0}
+          dayWidth={dayWidth}
           onCellClick={onCellClick}
         />
       ))}
@@ -711,10 +762,18 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
 
 // ─── SchedulerGrid ────────────────────────────────────────────────────────────
 
-function SchedulerGrid({ rows, weekStart, settings, onCellClick }) {
-  const weekDays = useMemo(() => (
-    Array.from({ length: 5 }, (_, i) => formatDateStr(addDays(weekStart, i)))
-  ), [weekStart]);
+function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick }) {
+  const dayWidth = DAY_WIDTH[weekView] ?? 120;
+
+  const weekDays = useMemo(() => {
+    const days = [];
+    for (let w = 0; w < weekView; w++) {
+      for (let d = 0; d < 5; d++) {
+        days.push(formatDateStr(addDays(weekStart, w * 7 + d)));
+      }
+    }
+    return days;
+  }, [weekStart, weekView]);
 
   // Derive unique employees (key = employeeCol|office|role|dept to handle name collisions)
   const employeeMap = useMemo(() => {
@@ -782,8 +841,8 @@ function SchedulerGrid({ rows, weekStart, settings, onCellClick }) {
       background: '#F4F6F9',
     }}>
       {/* Min-width ensures horizontal scroll kicks in when viewport is narrow */}
-      <div style={{ minWidth: 270 + 5 * 120, position: 'relative' }}>
-        <GridHeader weekDays={weekDays} />
+      <div style={{ minWidth: 270 + weekView * 5 * dayWidth, position: 'relative' }}>
+        <GridHeader weekDays={weekDays} weekView={weekView} weekStart={weekStart} />
 
         {departmentGroups.map(([dept, employees]) => {
           const base = globalRowIndex;
@@ -798,6 +857,7 @@ function SchedulerGrid({ rows, weekStart, settings, onCellClick }) {
               workTypeColors={settings.workTypeColors}
               defaultColor={settings.defaultColor}
               baseRowIndex={base}
+              dayWidth={dayWidth}
               onCellClick={onCellClick}
             />
           );
@@ -817,15 +877,17 @@ export default function App() {
   useElementColumns(config.source);
 
   const [weekStart,    setWeekStart]    = useState(() => getMondayOfWeek(new Date()));
+  const [weekView,     setWeekView]     = useState(1);
   const [activeTab,    setActiveTab]    = useState('Schedule');
   const [showSettings, setShowSettings] = useState(false);
 
   const settings = useMemo(() => loadSettings(config.config), [config.config]);
   const editMode = config.editMode === true || config.editMode === 'true';
 
-  const handlePrev  = useCallback(() => setWeekStart(d => addDays(d, -7)), []);
-  const handleNext  = useCallback(() => setWeekStart(d => addDays(d, 7)),  []);
-  const handleToday = useCallback(() => setWeekStart(getMondayOfWeek(new Date())), []);
+  const handlePrev      = useCallback(() => setWeekStart(d => addDays(d, -7 * weekView)), [weekView]);
+  const handleNext      = useCallback(() => setWeekStart(d => addDays(d,  7 * weekView)), [weekView]);
+  const handleToday     = useCallback(() => setWeekStart(getMondayOfWeek(new Date())), []);
+  const handleViewChange = useCallback(w => setWeekView(w), []);
 
   const handleSaveSettings = useCallback(newSettings => {
     console.log('[Scheduler] Settings saved:', newSettings);
@@ -866,11 +928,14 @@ export default function App() {
     return result;
   }, [rows, settings.workTypeColors]);
 
-  // Legend-only map: only work types visible in the currently displayed week
+  // Legend-only map: only work types visible in the currently displayed range
   const visibleWorkTypeColors = useMemo(() => {
-    const weekDaySet = new Set(
-      Array.from({ length: 5 }, (_, i) => formatDateStr(addDays(weekStart, i)))
-    );
+    const visibleDays = new Set();
+    for (let w = 0; w < weekView; w++) {
+      for (let d = 0; d < 5; d++) {
+        visibleDays.add(formatDateStr(addDays(weekStart, w * 7 + d)));
+      }
+    }
     const result = {};
     for (const row of rows) {
       const wt = row.workTypeCol;
@@ -878,18 +943,18 @@ export default function App() {
       const startStr = parseDate(row.dateCol);
       if (!startStr) continue;
       const endStr = parseDate(row.endDateCol);
-      if (expandDateRange(startStr, endStr).some(d => weekDaySet.has(d))) {
+      if (expandDateRange(startStr, endStr).some(d => visibleDays.has(d))) {
         result[wt] = workTypeColors[wt] ?? stringToColor(wt);
       }
     }
     return result;
-  }, [rows, weekStart, workTypeColors]);
+  }, [rows, weekStart, weekView, workTypeColors]);
 
   // ── Loading state gates ──────────────────────────────────────────────────
   const hasSource  = Boolean(config.source);
   const hasAllCols = REQUIRED_COLS.every(k => Boolean(config[k]));
 
-  console.log('[Scheduler] Render — hasSource:', hasSource, '| hasAllCols:', hasAllCols, '| rows:', rows.length, '| editMode:', editMode, '| week:', formatDateStr(weekStart));
+  console.log('[Scheduler] Render — hasSource:', hasSource, '| hasAllCols:', hasAllCols, '| rows:', rows.length, '| editMode:', editMode, '| week:', formatDateStr(weekStart), '| weekView:', weekView);
 
   let gridContent;
   if (!hasSource) {
@@ -906,16 +971,19 @@ export default function App() {
         <SchedulerHeader
           title={settings.title}
           weekStart={weekStart}
+          weekView={weekView}
           workTypeColors={visibleWorkTypeColors}
           onPrev={handlePrev}
           onNext={handleNext}
           onToday={handleToday}
+          onViewChange={handleViewChange}
         />
         <ViewTabs activeTab={activeTab} onTabChange={setActiveTab} />
         {activeTab === 'Schedule' ? (
           <SchedulerGrid
             rows={rows}
             weekStart={weekStart}
+            weekView={weekView}
             settings={{ ...settings, workTypeColors }}
             onCellClick={handleCellClick}
           />
