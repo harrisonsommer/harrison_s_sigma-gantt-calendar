@@ -52,8 +52,6 @@ const SENIORITY_ORDER = [
   'intern',
 ];
 
-const TABS = ['Schedule', 'Utilization', 'Staff View', 'Client View', 'In The Queue'];
-
 const DAY_WIDTH = { 1: 120, 2: 90, 4: 70 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -403,46 +401,6 @@ function ColorLegend({ workTypeColors }) {
           <span style={{ color: '#A8B8CC', whiteSpace: 'nowrap' }}>{label}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ─── ViewTabs ─────────────────────────────────────────────────────────────────
-
-function ViewTabs({ activeTab, onTabChange }) {
-  return (
-    <div style={{
-      display: 'flex',
-      background: '#0D1B2A',
-      borderBottom: '1px solid #1E3048',
-      paddingLeft: 12,
-      flexShrink: 0,
-    }}>
-      {TABS.map(tab => {
-        const isActive = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            onClick={() => onTabChange(tab)}
-            style={{
-              padding: '9px 18px',
-              border: 'none',
-              borderBottom: isActive ? '2px solid #4A90D9' : '2px solid transparent',
-              background: 'transparent',
-              color: isActive ? '#fff' : '#5B7A99',
-              cursor: tab === 'Schedule' ? 'pointer' : 'default',
-              fontSize: 12,
-              fontWeight: isActive ? 600 : 400,
-              fontFamily: 'inherit',
-              letterSpacing: 0.2,
-              transition: 'color 0.15s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tab}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -878,7 +836,6 @@ export default function App() {
 
   const [weekStart,    setWeekStart]    = useState(() => getMondayOfWeek(new Date()));
   const [weekView,     setWeekView]     = useState(1);
-  const [activeTab,    setActiveTab]    = useState('Schedule');
   const [showSettings, setShowSettings] = useState(false);
 
   const settings = useMemo(() => loadSettings(config.config), [config.config]);
@@ -978,28 +935,13 @@ export default function App() {
           onToday={handleToday}
           onViewChange={handleViewChange}
         />
-        <ViewTabs activeTab={activeTab} onTabChange={setActiveTab} />
-        {activeTab === 'Schedule' ? (
-          <SchedulerGrid
+        <SchedulerGrid
             rows={rows}
             weekStart={weekStart}
             weekView={weekView}
             settings={{ ...settings, workTypeColors }}
             onCellClick={handleCellClick}
           />
-        ) : (
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#9CA3AF',
-            fontSize: 13,
-            background: '#F4F6F9',
-          }}>
-            {activeTab} — Coming soon
-          </div>
-        )}
       </>
     );
   }
