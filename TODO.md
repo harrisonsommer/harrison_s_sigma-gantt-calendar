@@ -3,6 +3,8 @@
 - [ ] Add Vitest unit tests for pure utility functions (`parseDate`, `expandDateRange`, `formatDateStr`, `stringToColor`, `getWorkTypeColor`, `loadSettings`, `getSeniorityRank`) to catch regressions in date/color/settings logic. No SDK mocking required — these functions have no Sigma dependencies.
 - [ ] Ability to resize columns in the table by dragging
 - [ ] Drag and drop assignment chips to a different day — dragging a chip from one cell to another should update the underlying date (and end date if present) by emitting the new date back to Sigma via variables/action trigger. Requires HTML5 drag-and-drop or a pointer-event approach; no external DnD library. Key challenges: visual drag preview, drop target highlighting, and deciding whether the plugin owns the write-back or just emits the intended change for Sigma to handle. How does this work for chips that are part of multi-day events? Error handling?
+- [ ] Click on a chip to open a modal to edit it 
+- [x] Add row ID to the configuration
 - [ ] Settings button (⚙️ FAB) and modal are not appearing when Edit Mode is toggled on — debug why `config.editMode` is not resolving to `true` and fix.
 - [x] Make the entire employee row a uniform height — empty cells should stretch to match the tallest cell in that row (which may have multiple stacked chips). Currently empty cells use a fixed `minHeight` while occupied cells grow with content, causing mismatched row heights.
 - [x] Show 1 week, 2 weeks, or 4 weeks within the view. Switch between them dynamically. 

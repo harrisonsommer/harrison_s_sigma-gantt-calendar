@@ -14,10 +14,12 @@ client.config.configureEditorPanel([
   { name: 'clientCol',     type: 'column', source: 'source', allowMultiple: false, label: 'Client / Engagement Name' },
   { name: 'workTypeCol',   type: 'column', source: 'source', allowMultiple: false, label: 'Work Type (for color)' },
   { name: 'endDateCol',        type: 'column', source: 'source', allowMultiple: false, label: 'End Date (Optional)', allowedTypes: ['date', 'datetime'] },
+  { name: 'rowIdCol',          type: 'column', source: 'source', allowMultiple: false, label: 'Row ID' },
   { name: 'config',            type: 'text',           label: 'Settings Config (JSON)', defaultValue: '{}' },
   { name: 'editMode',          type: 'toggle',         label: 'Edit Mode' },
   { name: 'selectedEmployee',  type: 'variable',       label: 'Selected Employee Variable' },
   { name: 'selectedDate',      type: 'variable',       label: 'Selected Date Variable' },
+  { name: 'selectedRowId',     type: 'variable',       label: 'Selected Row ID Variable' },
   { name: 'onCellClick',       type: 'action-trigger', label: 'Cell Click Action' },
 ]);
 
@@ -32,7 +34,7 @@ const DEFAULT_SETTINGS = {
 
 const COL_KEYS = [
   'employeeCol', 'officeCol', 'roleCol', 'departmentCol',
-  'dateCol', 'endDateCol', 'clientCol', 'workTypeCol',
+  'dateCol', 'endDateCol', 'clientCol', 'workTypeCol', 'rowIdCol',
 ];
 
 const REQUIRED_COLS = [
@@ -565,6 +567,7 @@ function AssignmentChip({ clientName, workType, color }) {
   return (
     <div
       title={`${clientName || ''}${workType ? ` — ${workType}` : ''}`}
+      onClick={e => e.stopPropagation()}
       style={{
         background: color,
         color: light ? '#2D3748' : '#fff',
@@ -593,7 +596,7 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
     return (
       <div
         style={{ ...S.cell, background: bg, cursor: onCellClick ? 'pointer' : 'default' }}
-        onClick={onCellClick}
+        onClick={onCellClick ? () => onCellClick(null) : undefined}
       />
     );
   }
@@ -601,7 +604,7 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
   return (
     <div
       style={{ ...S.cell, background: bg, cursor: onCellClick ? 'pointer' : 'default' }}
-      onClick={onCellClick}
+      onClick={onCellClick ? () => onCellClick(null) : undefined}
     >
       {assignments.map((a, idx) => (
         <AssignmentChip
@@ -666,7 +669,7 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
               workTypeColors={workTypeColors}
               defaultColor={defaultColor}
               bg={bg}
-              onCellClick={onCellClick ? () => onCellClick(employee.employeeCol, dateStr) : undefined}
+              onCellClick={onCellClick ? (rowId) => onCellClick(employee.employeeCol, dateStr, rowId) : undefined}
             />
           </div>
         );
@@ -855,15 +858,17 @@ export default function App() {
   // Cell click — write variables and fire action trigger
   const [, setSelectedEmployee] = useVariable(config.selectedEmployee);
   const [, setSelectedDate]     = useVariable(config.selectedDate);
+  const [, setSelectedRowId]    = useVariable(config.selectedRowId);
   const triggerCellClick        = useActionTrigger(config.onCellClick);
 
-  const handleCellClick = useCallback((employeeName, dateStr) => {
-    console.log('[Scheduler] Cell clicked:', { employeeName, dateStr });
+  const handleCellClick = useCallback((employeeName, dateStr, rowId = null) => {
+    console.log('[Scheduler] Cell clicked:', { employeeName, dateStr, rowId });
     if (config.selectedEmployee) setSelectedEmployee(employeeName ?? '');
     if (config.selectedDate)     setSelectedDate(dateStr ?? '');
+    if (config.selectedRowId)    setSelectedRowId(rowId != null ? String(rowId) : '');
     if (triggerCellClick)        triggerCellClick();
-    console.log('[Scheduler] Variables set — employee:', config.selectedEmployee ? employeeName : '(not mapped)', '| date:', config.selectedDate ? dateStr : '(not mapped)', '| trigger:', triggerCellClick ? 'fired' : '(not mapped)');
-  }, [config.selectedEmployee, config.selectedDate, setSelectedEmployee, setSelectedDate, triggerCellClick]);
+    console.log('[Scheduler] Variables set — employee:', config.selectedEmployee ? employeeName : '(not mapped)', '| date:', config.selectedDate ? dateStr : '(not mapped)', '| rowId:', config.selectedRowId ? rowId : '(not mapped)', '| trigger:', triggerCellClick ? 'fired' : '(not mapped)');
+  }, [config.selectedEmployee, config.selectedDate, config.selectedRowId, setSelectedEmployee, setSelectedDate, setSelectedRowId, triggerCellClick]);
 
   // Derive rows (empty array until data is ready)
   const rows = useMemo(() => {
