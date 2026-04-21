@@ -20,8 +20,12 @@ client.config.configureEditorPanel([
   { name: 'selectedEmployee',  type: 'variable',       label: 'Selected Employee Variable' },
   { name: 'selectedDate',      type: 'variable',       label: 'Selected Date Variable' },
   { name: 'selectedRowId',     type: 'variable',       label: 'Selected Row ID Variable' },
+  { name: 'newEmployee',        type: 'variable',       label: 'New Employee Variable (Drop)' },
+  { name: 'newStartDate',      type: 'variable',       label: 'New Start Date Variable (Drop)' },
+  { name: 'newEndDate',        type: 'variable',       label: 'New End Date Variable (Drop)' },
   { name: 'onCellClick',       type: 'action-trigger', label: 'Cell Click Action' },
   { name: 'onChipClick',       type: 'action-trigger', label: 'Chip Click Action' },
+  { name: 'onChipDrop',        type: 'action-trigger', label: 'Chip Drop Action' },
 ]);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -563,11 +567,21 @@ function GridHeader({ weekDays, weekView, weekStart }) {
 
 // ─── AssignmentChip ───────────────────────────────────────────────────────────
 
-function AssignmentChip({ clientName, workType, color, onClick }) {
+function AssignmentChip({ clientName, workType, color, onClick, dragData }) {
   const light = isLightColor(color);
+  const isDraggable = Boolean(dragData);
+
+  const handleDragStart = e => {
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'move';
+    console.log('[Scheduler] Drag started:', dragData);
+  };
+
   return (
     <div
       title={`${clientName || ''}${workType ? ` — ${workType}` : ''}`}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? handleDragStart : undefined}
       onClick={e => { e.stopPropagation(); onClick?.(); }}
       style={{
         background: color,
@@ -580,7 +594,7 @@ function AssignmentChip({ clientName, workType, color, onClick }) {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         maxWidth: '100%',
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: isDraggable ? 'grab' : onClick ? 'pointer' : 'default',
         lineHeight: 1.5,
         border: light ? '1px solid rgba(0,0,0,0.08)' : 'none',
       }}
@@ -614,15 +628,78 @@ function AssignmentCell({ assignments, workTypeColors, defaultColor, bg, onCellC
           workType={a.workTypeCol}
           color={getWorkTypeColor(a.workTypeCol, workTypeColors, defaultColor)}
           onClick={onChipClick ? () => onChipClick(a.rowIdCol ?? null) : undefined}
+          dragData={{
+            rowId: a.rowIdCol,
+            sourceEmployee: a.employeeCol,
+            sourceDateStr: parseDate(a.dateCol),
+            sourceEndDateStr: parseDate(a.endDateCol) ?? null,
+          }}
         />
       ))}
     </div>
   );
 }
 
+// ─── DayCell ─────────────────────────────────────────────────────────────────
+
+function DayCell({ dateStr, employee, assignmentMap, workTypeColors, defaultColor, bg, dayWidth, onCellClick, onChipClick, onChipDrop }) {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const key = `${employee.employeeCol}||${dateStr}`;
+  const assignments = assignmentMap[key] || [];
+
+  const handleDragOver = e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  // Risk: dragLeave fires on children — only clear when truly leaving this cell
+  const handleDragLeave = e => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setIsDragOver(false);
+  };
+
+  const handleDrop = e => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!onChipDrop) return;
+    try {
+      const sourceData = JSON.parse(e.dataTransfer.getData('text/plain'));
+      onChipDrop(sourceData, employee.employeeCol, dateStr);
+    } catch (err) {
+      console.warn('[Scheduler] Drop parse error:', err);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: dayWidth ?? 120,
+        display: 'flex',
+        flexDirection: 'column',
+        outline: isDragOver ? '2px solid #4A90D9' : 'none',
+        outlineOffset: -2,
+        boxSizing: 'border-box',
+      }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <AssignmentCell
+        assignments={assignments}
+        workTypeColors={workTypeColors}
+        defaultColor={defaultColor}
+        bg={bg}
+        onCellClick={onCellClick ? (rowId) => onCellClick(employee.employeeCol, dateStr, rowId) : undefined}
+        onChipClick={onChipClick ? (rowId) => onChipClick(employee.employeeCol, dateStr, rowId) : undefined}
+      />
+    </div>
+  );
+}
+
 // ─── EmployeeRow ──────────────────────────────────────────────────────────────
 
-function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, dayWidth, onCellClick, onChipClick }) {
+function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaultColor, isEven, dayWidth, onCellClick, onChipClick, onChipDrop }) {
   const bg = isEven ? '#FFFFFF' : '#F7F9FB';
 
   const leftCell = (content, width, left, bold = false) => (
@@ -661,29 +738,28 @@ function EmployeeRow({ employee, weekDays, assignmentMap, workTypeColors, defaul
       {leftCell(employee.roleCol,     80,  60)}
       {leftCell(employee.employeeCol, 130, 140, true)}
 
-      {weekDays.map(dateStr => {
-        const key = `${employee.employeeCol}||${dateStr}`;
-        const assignments = assignmentMap[key] || [];
-        return (
-          <div key={dateStr} style={{ flex: 1, minWidth: dayWidth ?? 120, display: 'flex', flexDirection: 'column' }}>
-            <AssignmentCell
-              assignments={assignments}
-              workTypeColors={workTypeColors}
-              defaultColor={defaultColor}
-              bg={bg}
-              onCellClick={onCellClick ? (rowId) => onCellClick(employee.employeeCol, dateStr, rowId) : undefined}
-              onChipClick={onChipClick ? (rowId) => onChipClick(employee.employeeCol, dateStr, rowId) : undefined}
-            />
-          </div>
-        );
-      })}
+      {weekDays.map(dateStr => (
+        <DayCell
+          key={dateStr}
+          dateStr={dateStr}
+          employee={employee}
+          assignmentMap={assignmentMap}
+          workTypeColors={workTypeColors}
+          defaultColor={defaultColor}
+          bg={bg}
+          dayWidth={dayWidth}
+          onCellClick={onCellClick}
+          onChipClick={onChipClick}
+          onChipDrop={onChipDrop}
+        />
+      ))}
     </div>
   );
 }
 
 // ─── DepartmentGroup ──────────────────────────────────────────────────────────
 
-function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, dayWidth, onCellClick, onChipClick }) {
+function DepartmentGroup({ department, employees, weekDays, assignmentMap, workTypeColors, defaultColor, baseRowIndex, dayWidth, onCellClick, onChipClick, onChipDrop }) {
   return (
     <>
       {/* Department label — full-width sticky row */}
@@ -719,6 +795,7 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
           dayWidth={dayWidth}
           onCellClick={onCellClick}
           onChipClick={onChipClick}
+          onChipDrop={onChipDrop}
         />
       ))}
     </>
@@ -727,7 +804,7 @@ function DepartmentGroup({ department, employees, weekDays, assignmentMap, workT
 
 // ─── SchedulerGrid ────────────────────────────────────────────────────────────
 
-function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick, onChipClick }) {
+function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick, onChipClick, onChipDrop }) {
   const dayWidth = DAY_WIDTH[weekView] ?? 120;
 
   const weekDays = useMemo(() => {
@@ -825,6 +902,7 @@ function SchedulerGrid({ rows, weekStart, weekView, settings, onCellClick, onChi
               dayWidth={dayWidth}
               onCellClick={onCellClick}
               onChipClick={onChipClick}
+              onChipDrop={onChipDrop}
             />
           );
         })}
@@ -864,24 +942,49 @@ export default function App() {
   const [, setSelectedEmployee] = useVariable(config.selectedEmployee);
   const [, setSelectedDate]     = useVariable(config.selectedDate);
   const [, setSelectedRowId]    = useVariable(config.selectedRowId);
+  const [, setNewEmployee]      = useVariable(config.newEmployee);
+  const [, setNewStartDate]     = useVariable(config.newStartDate);
+  const [, setNewEndDate]       = useVariable(config.newEndDate);
   const triggerCellClick        = useActionTrigger(config.onCellClick);
   const triggerChipClick        = useActionTrigger(config.onChipClick);
+  const triggerChipDrop         = useActionTrigger(config.onChipDrop);
 
   const handleChipClick = useCallback((employeeName, dateStr, rowId) => {
     console.log('[Scheduler] Chip clicked:', { employeeName, dateStr, rowId });
     if (config.selectedEmployee) setSelectedEmployee(employeeName ?? '');
     if (config.selectedDate)     setSelectedDate(dateStr ?? '');
     if (config.selectedRowId)    setSelectedRowId(rowId != null ? String(rowId) : '');
-    if (triggerChipClick)        triggerChipClick();
+    if (config.onChipClick)      triggerChipClick();
     console.log('[Scheduler] Chip variables set — employee:', config.selectedEmployee ? employeeName : '(not mapped)', '| date:', config.selectedDate ? dateStr : '(not mapped)', '| rowId:', config.selectedRowId ? rowId : '(not mapped)');
   }, [config.selectedEmployee, config.selectedDate, config.selectedRowId, setSelectedEmployee, setSelectedDate, setSelectedRowId, triggerChipClick]);
+
+  const handleChipDrop = useCallback((sourceData, targetEmployee, targetDateStr) => {
+    const { rowId, sourceEmployee, sourceDateStr, sourceEndDateStr } = sourceData;
+    // New start = drop target; end shifts by same duration to preserve range length
+    const newStartDate = targetDateStr;
+    let newEndDate = '';
+    if (sourceEndDateStr) {
+      const durationDays = Math.round(
+        (new Date(sourceEndDateStr + 'T00:00:00') - new Date(sourceDateStr + 'T00:00:00'))
+        / (1000 * 60 * 60 * 24)
+      );
+      newEndDate = formatDateStr(addDays(new Date(targetDateStr + 'T00:00:00'), durationDays));
+    }
+    console.log('[Scheduler] Chip dropped:', { rowId, sourceEmployee, sourceDateStr, targetEmployee, targetDateStr, newStartDate, newEndDate: newEndDate || '(none)' });
+    if (config.selectedRowId)    setSelectedRowId(rowId != null ? String(rowId) : '');
+    if (config.selectedEmployee) setSelectedEmployee(sourceEmployee ?? '');
+    if (config.newEmployee)      setNewEmployee(targetEmployee ?? '');
+    if (config.newStartDate)     setNewStartDate(newStartDate);
+    if (config.newEndDate)       setNewEndDate(newEndDate);
+    if (config.onChipDrop)       triggerChipDrop();
+  }, [config.selectedRowId, config.selectedEmployee, config.newEmployee, config.newStartDate, config.newEndDate, setSelectedRowId, setSelectedEmployee, setNewEmployee, setNewStartDate, setNewEndDate, triggerChipDrop]);
 
   const handleCellClick = useCallback((employeeName, dateStr, rowId = null) => {
     console.log('[Scheduler] Cell clicked:', { employeeName, dateStr, rowId });
     if (config.selectedEmployee) setSelectedEmployee(employeeName ?? '');
     if (config.selectedDate)     setSelectedDate(dateStr ?? '');
     if (config.selectedRowId)    setSelectedRowId(rowId != null ? String(rowId) : '');
-    if (triggerCellClick)        triggerCellClick();
+    if (config.onCellClick)      triggerCellClick();
     console.log('[Scheduler] Variables set — employee:', config.selectedEmployee ? employeeName : '(not mapped)', '| date:', config.selectedDate ? dateStr : '(not mapped)', '| rowId:', config.selectedRowId ? rowId : '(not mapped)', '| trigger:', triggerCellClick ? 'fired' : '(not mapped)');
   }, [config.selectedEmployee, config.selectedDate, config.selectedRowId, setSelectedEmployee, setSelectedDate, setSelectedRowId, triggerCellClick]);
 
@@ -962,6 +1065,7 @@ export default function App() {
             settings={{ ...settings, workTypeColors }}
             onCellClick={handleCellClick}
             onChipClick={handleChipClick}
+            onChipDrop={handleChipDrop}
           />
       </>
     );
